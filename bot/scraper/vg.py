@@ -8,20 +8,32 @@ import sys
 import re
 import time
 from urllib.parse import urljoin
+import subprocess
 
-try:
-    import requests
-except ImportError:
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "-q"])
-    import requests
+# Auto-install dependencies
+def _ensure_dependency(package_name, import_name=None):
+    """Auto-install missing dependencies"""
+    if import_name is None:
+        import_name = package_name
+    try:
+        __import__(import_name)
+        return True
+    except ImportError:
+        print(f"[INFO] Installing {package_name}...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package_name, "-q"])
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to install {package_name}: {e}")
+            return False
 
-try:
-    from bs4 import BeautifulSoup
-except ImportError:
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "beautifulsoup4", "-q"])
-    from bs4 import BeautifulSoup
+# Ensure all dependencies are installed
+_ensure_dependency("requests", "requests")
+_ensure_dependency("beautifulsoup4", "bs4")
+_ensure_dependency("lxml", "lxml")
+
+import requests
+from bs4 import BeautifulSoup
 
 
 class VegamoviesScraper:

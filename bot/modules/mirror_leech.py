@@ -131,6 +131,7 @@ class Mirror(TaskListener):
             "-ns": "",
             "-tl": "",
             "-ff": set(),
+            "-q": "",
         }
 
         arg_parser(input_list[1:], args)
@@ -163,6 +164,7 @@ class Mirror(TaskListener):
         self.up_dest = args["-up"]
         self.rc_flags = args["-rcf"]
         self.link = args["link"]
+        self.quality = args["-q"]
         self.compress = args["-z"]
         self.extract = args["-e"]
         self.join = args["-j"]
@@ -390,7 +392,7 @@ class Mirror(TaskListener):
             content_type = await get_content_type(self.link)
             if content_type is None or re_match(r"text/html|text/plain", content_type):
                 try:
-                    self.link = await sync_to_async(direct_link_generator, self.link)
+                    self.link = await sync_to_async(direct_link_generator, self.link, self.quality)
                     if isinstance(self.link, tuple):
                         self.link, headers = self.link
                     elif isinstance(self.link, str):
