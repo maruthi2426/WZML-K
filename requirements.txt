@@ -34,6 +34,7 @@ pytz
 qbittorrent-api
 requests
 speedtest-cli
+selenium
 telegraph
 tenacity
 tgcrypto
