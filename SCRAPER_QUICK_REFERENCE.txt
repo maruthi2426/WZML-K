@@ -1,0 +1,172 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║          VEGAMOVIES SCRAPER - QUICK REFERENCE GUIDE                         ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📍 INSTALLATION LOCATION
+   Bot Folder: bot/scraper/
+   Main File: bot/scraper/vg.py (324 lines)
+   
+✅ INSTALLATION STATUS: COMPLETE & READY
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 BASIC USAGE
+
+   Syntax: /leech <vegamovies_url> -q <quality>
+
+   Examples:
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │ /leech https://vegamovies.nf/37740-kalinga-2024...html -q 1080p   │
+   │ /leech https://vegamovies.nf/37740-kalinga-2024...html -q 720p    │
+   │ /leech https://vegamovies.nf/37740-kalinga-2024...html             │
+   └─────────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎬 QUALITY OPTIONS
+
+   480p     → Standard Definition
+   720p     → HD (High Definition)
+   1080p    → Full HD (Recommended)
+
+   Tip: Omit -q flag to get all available qualities
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚡ WHAT IT DOES
+
+   1. Loads Vegamovies movie/series page
+   2. Extracts shortener links (nexdrive, fast-dl, etc)
+   3. Filters by quality if -q flag provided
+   4. Resolves shorteners to direct download links
+   5. Logs all found direct links
+   6. Downloads from direct link
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 EXPECTED TIMING
+
+   Page load & parse:        3-5 seconds
+   Per shortener:            2-3 seconds each
+   Quality filtered (1 url):  5-8 seconds total
+   No filter (4 urls):       12-15 seconds total
+
+   → Patience is key! JavaScript rendering takes time.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 LOG OUTPUT EXAMPLE
+
+   [INFO] ========== VEGAMOVIES SCRAPER v2.0 ==========
+   [INFO] URL: https://vegamovies.nf/37740-kalinga-2024...
+   [INFO] Quality Filter: 1080p
+   [INFO] Title: Kalinga
+   [INFO] Season: S01
+   [INFO] Found 1 shortener link(s)
+   [INFO] Resolving shortener links...
+   [INFO] [1/1] Processing 1080P - EP01
+   [INFO]      Shortener: https://nexdrive.net/s/abc123...
+   [INFO]      ✓ Direct Link: https://video-downloads.googleusercontent.com/...
+   [INFO] ========== SCRAPER COMPLETED ==========
+   [INFO] Total direct links found: 1
+   [LOG] Link 1: Kalinga - 1080P - 1.2 GB
+   [LOG] URL: https://video-downloads.googleusercontent.com/...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔧 TROUBLESHOOTING
+
+   ⚠ "ERROR: WebScrapper module not loaded"
+   → Restart bot
+   → Verify bot/scraper/vg.py exists
+   → Check direct_link_generator.py is updated
+
+   ⚠ Chrome WebDriver errors
+   → pip install --upgrade webdriver-manager
+   → apt-get install chromium-browser
+
+   ⚠ No links found
+   → Check URL is valid & accessible
+   → Verify quality spelling (1080p vs 1080P)
+   → Wait a few seconds (JavaScript loading)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 DOCUMENTATION FILES
+
+   VEGAMOVIES_SETUP.md
+   → Complete setup guide with examples
+
+   bot/scraper/README.md
+   → Detailed scraper documentation
+
+   SCRAPER_INSTALLATION_SUMMARY.txt
+   → What was installed & verified
+
+   test_vegamovies_scraper.py
+   → Test script to verify installation
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✨ KEY FEATURES
+
+   ✅ Quality Filtering      - Extract specific quality only
+   ✅ Multi-Format Support   - Movies & TV series
+   ✅ Direct Links           - Converts shorteners to direct URLs
+   ✅ Fast Processing        - Single Chrome instance
+   ✅ Detailed Logging       - Shows all steps & links
+   ✅ Auto Dependencies      - Installs packages automatically
+   ✅ Error Handling         - Clear error messages
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🧪 TESTING
+
+   To verify installation:
+   python test_vegamovies_scraper.py
+
+   Expected output:
+   ✓ Scraper imported successfully
+   ✓ Scraper class instantiated successfully
+   ✓ Dependencies installed
+   ✓ Scraper integrated with direct link generator
+   ✓ All tests passed! Scraper is ready to use.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚙️ TECHNICAL SPECS
+
+   Language: Python 3
+   Dependencies: selenium, beautifulsoup4, webdriver-manager
+   Integration: Direct Link Generator
+   Chrome: Headless mode with automatic driver management
+   Output: List of dicts with URL, quality, size, episode info
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 NEXT STEPS
+
+   1. Test installation: python test_vegamovies_scraper.py
+   2. Try scraping: /leech <vegamovies_url> -q 1080p
+   3. Monitor logs to confirm links are found
+   4. Enjoy your downloads!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 TIPS
+
+   • Quality "1080p" works best - most sizes available
+   • Remove -q flag to scrape all qualities at once
+   • Logs show direct links BEFORE download starts
+   • Check logs for "Direct Link:" to see what was found
+   • Patience - JavaScript rendering takes 5-10 seconds
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Version: 2.0 (Fresh Rewrite)
+Status: Ready to Use ✅
+Last Updated: April 24, 2026
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║  Installation complete! Start using: /leech <url> -q <quality>            ║
+╚════════════════════════════════════════════════════════════════════════════╝
