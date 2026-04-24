@@ -111,51 +111,52 @@ def _load_hubcloud_module():
 
 def _load_webscrapper_module():
     global WEBSCRAPPER_AVAILABLE, scrape_website
-    webscrapper_path = ospath.join(bot_dir, 'webscrapper.py')
-    print(f"[DEBUG] Attempting to load WebScrapper from: {webscrapper_path}")
-    print(f"[DEBUG] File exists: {ospath.exists(webscrapper_path)}")
+    # Try to load from new scraper package
+    vg_scraper_path = ospath.join(bot_dir, 'scraper', 'vg.py')
+    print(f"[DEBUG] Attempting to load Vegamovies Scraper from: {vg_scraper_path}")
+    print(f"[DEBUG] File exists: {ospath.exists(vg_scraper_path)}")
     
-    if not ospath.exists(webscrapper_path):
-        print(f"[ERROR] WebScrapper not found at {webscrapper_path}")
+    if not ospath.exists(vg_scraper_path):
+        print(f"[ERROR] Vegamovies scraper not found at {vg_scraper_path}")
         return False
     
     try:
-        print(f"[DEBUG] Creating module spec for webscrapper...")
-        spec = importlib.util.spec_from_file_location("webscrapper_module", webscrapper_path)
+        print(f"[DEBUG] Creating module spec for vg scraper...")
+        spec = importlib.util.spec_from_file_location("vg_scraper_module", vg_scraper_path)
         if spec is None or spec.loader is None:
-            print(f"[ERROR] Failed to create spec for WebScrapper")
+            print(f"[ERROR] Failed to create spec for VG Scraper")
             return False
         
         print(f"[DEBUG] Creating module from spec...")
-        webscrapper_module = importlib.util.module_from_spec(spec)
+        vg_module = importlib.util.module_from_spec(spec)
         
         print(f"[DEBUG] Executing module...")
-        spec.loader.exec_module(webscrapper_module)
+        spec.loader.exec_module(vg_module)
         
         print(f"[DEBUG] Checking for scrape_website function...")
-        if not hasattr(webscrapper_module, 'scrape_website'):
-            print(f"[ERROR] webscrapper.py does not have scrape_website function")
-            print(f"[DEBUG] Available attributes: {dir(webscrapper_module)}")
+        if not hasattr(vg_module, 'scrape_website'):
+            print(f"[ERROR] vg.py does not have scrape_website function")
+            print(f"[DEBUG] Available attributes: {dir(vg_module)}")
             return False
         
-        scrape_website = webscrapper_module.scrape_website
+        scrape_website = vg_module.scrape_website
         WEBSCRAPPER_AVAILABLE = True
-        print(f"[INFO] WebScrapper module loaded successfully")
+        print(f"[INFO] Vegamovies Scraper loaded successfully")
         return True
     except SyntaxError as e:
-        print(f"[ERROR] Syntax error in webscrapper.py: {e}")
+        print(f"[ERROR] Syntax error in vg.py: {e}")
         print(f"[ERROR] Line {e.lineno}: {e.text}")
         import traceback
         traceback.print_exc()
         return False
     except ImportError as e:
-        print(f"[ERROR] Import error in webscrapper.py: {e}")
-        print(f"[ERROR] Make sure all dependencies are installed: requests, beautifulsoup4")
+        print(f"[ERROR] Import error in vg.py: {e}")
+        print(f"[ERROR] Make sure all dependencies are installed: selenium, beautifulsoup4, webdriver-manager")
         import traceback
         traceback.print_exc()
         return False
     except Exception as e:
-        print(f"[ERROR] Failed to load WebScrapper: {type(e).__name__}: {str(e)}")
+        print(f"[ERROR] Failed to load Vegamovies Scraper: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
@@ -269,19 +270,19 @@ def webscrapper_handler(link, quality_filter=None):
     """Web scraper for VegaMovies and other websites"""
     # Attempt to load if not already loaded
     if not WEBSCRAPPER_AVAILABLE:
-        print(f"[WARNING] Attempting deferred load of WebScrapper")
+        print(f"[WARNING] Attempting deferred load of Vegamovies Scraper")
         _load_webscrapper_module()
     
     if not WEBSCRAPPER_AVAILABLE or scrape_website is None:
         print(f"[ERROR] WEBSCRAPPER_AVAILABLE={WEBSCRAPPER_AVAILABLE}, scrape_website={scrape_website}")
-        raise DirectDownloadLinkException("ERROR: WebScrapper module not loaded. Make sure webscrapper.py exists in bot directory")
+        raise DirectDownloadLinkException("ERROR: Vegamovies scraper module not loaded. Make sure bot/scraper/vg.py exists")
     
     try:
-        print(f"\n[INFO] ========== STARTING SCRAPER ==========")
+        print(f"\n[INFO] ========== STARTING VEGAMOVIES SCRAPER ==========")
         print(f"[INFO] Please wait... Scraping links from: {link}")
         if quality_filter:
             print(f"[INFO] Quality filter: {quality_filter}")
-        print(f"[INFO] =======================================\n")
+        print(f"[INFO] ===================================================\n")
         
         results = scrape_website(link, quality_filter)
         
@@ -289,13 +290,18 @@ def webscrapper_handler(link, quality_filter=None):
         if not results:
             print(f"[ERROR] No direct download links found")
             print(f"[INFO] ==========================================\n")
-            raise DirectDownloadLinkException("ERROR: No direct download links found from scraper")
+            raise DirectDownloadLinkException("ERROR: No direct download links found from Vegamovies scraper")
         
-        print(f"[INFO] Found {len(results)} link(s)")
+        print(f"[INFO] Found {len(results)} direct link(s)")
         print(f"[INFO] Preparing for download...")
         print(f"[INFO] ==========================================\n")
         
-        # Return the first/best result or all results
+        # Display found links in logs
+        for idx, result in enumerate(results, 1):
+            print(f"[LOG] Link {idx}: {result.get('show_name', 'Unknown')} - {result.get('quality', 'unknown')} - {result.get('size', 'unknown')}")
+            print(f"[LOG] URL: {result['url']}\n")
+        
+        # Return the first result or all results
         if len(results) == 1:
             selected_url = results[0]["url"]
             print(f"[INFO] Selected link: {selected_url[:100]}...")
@@ -309,10 +315,10 @@ def webscrapper_handler(link, quality_filter=None):
     except DirectDownloadLinkException:
         raise
     except Exception as e:
-        print(f"[ERROR] WebScrapper exception: {type(e).__name__}: {str(e)}")
+        print(f"[ERROR] Vegamovies Scraper exception: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
-        raise DirectDownloadLinkException(f"ERROR: WebScrapper - {str(e)}")
+        raise DirectDownloadLinkException(f"ERROR: Vegamovies Scraper - {str(e)}")
 
 
 debrid_link_supported_sites = [
