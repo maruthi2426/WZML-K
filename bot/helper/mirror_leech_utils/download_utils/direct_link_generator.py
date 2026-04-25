@@ -168,7 +168,13 @@ def _load_webscrapper_module():
         return False
     except ImportError as e:
         print(f"[ERROR] Import error in vg.py: {e}")
-        print(f"[ERROR] Make sure all dependencies are installed: selenium, beautifulsoup4, webdriver-manager")
+        print(f"[ERROR] Make sure all dependencies are installed: requests, beautifulsoup4, cloudscraper")
+        print(f"[ERROR] Installing missing dependencies...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "beautifulsoup4", "cloudscraper", "-q"])
+            print(f"[INFO] Dependencies installed. Please retry the scraping command.")
+        except:
+            pass
         import traceback
         traceback.print_exc()
         return False
