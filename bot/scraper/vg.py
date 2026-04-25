@@ -1,95 +1,82 @@
 """
-Vegamovies Direct Link Scraper v2.0
-Fast scraper to extract direct download links from Vegamovies movie URLs
+Vegamovies Direct Link Scraper v3.0
+Fast HTTP-based scraper (no Selenium) to extract direct download links from Vegamovies movie URLs
 Supports quality filtering and both movie and series content
+Works on headless servers without Chrome/Chromium installed
 """
 
 import sys
 import re
 import time
 from urllib.parse import urljoin
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+import subprocess
 
 try:
     from bs4 import BeautifulSoup
 except ImportError:
     try:
-        import subprocess
         subprocess.check_call([sys.executable, "-m", "pip", "install", "beautifulsoup4", "-q"])
         from bs4 import BeautifulSoup
     except:
         BeautifulSoup = None
 
 try:
-    from webdriver_manager.chrome import ChromeDriverManager
+    import requests
 except ImportError:
     try:
-        import subprocess
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "webdriver-manager", "-q"])
-        from webdriver_manager.chrome import ChromeDriverManager
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "-q"])
+        import requests
     except:
-        ChromeDriverManager = None
+        requests = None
+
+try:
+    from cloudscraper import create_scraper as cloudscraper_create
+except ImportError:
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "cloudscraper", "-q"])
+        from cloudscraper import create_scraper as cloudscraper_create
+    except:
+        cloudscraper_create = None
 
 
 class VegamoviesScraper:
     def __init__(self):
-        self.driver = None
+        self.session = None
         self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+        self._init_session()
 
-    def _create_driver(self):
-        """Create optimized Chrome WebDriver for scraping"""
+    def _init_session(self):
+        """Initialize HTTP session with proper headers"""
         try:
-            options = Options()
-            options.add_argument("--headless=new")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-setuid-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-gpu")
-            options.add_argument("--disable-extensions")
-            options.add_argument("--disable-infobars")
-            options.add_argument("--disable-blink-features=AutomationControlled")
-            options.add_argument("--blink-settings=imagesEnabled=false")
-            options.add_argument("--log-level=3")
-            options.add_argument("--disable-web-resources")
-            options.page_load_strategy = "eager"
-            
-            options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
-            options.add_experimental_option("useAutomationExtension", False)
-            options.add_experimental_option("prefs", {
-                "profile.managed_default_content_settings.images": 2,
-                "profile.default_content_setting_values.notifications": 2,
-            })
-
-            if ChromeDriverManager:
-                return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            # Try cloudscraper first to bypass Cloudflare
+            if cloudscraper_create:
+                self.session = cloudscraper_create()
+                print("[INFO] Using cloudscraper for CF bypass")
             else:
-                return webdriver.Chrome(options=options)
+                # Fallback to regular requests
+                self.session = requests.Session()
+                print("[INFO] Using regular requests session")
+            
+            self.session.headers.update({
+                "User-Agent": self.user_agent,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1"
+            })
         except Exception as e:
-            print(f"[ERROR] Failed to create WebDriver: {str(e)}")
-            raise
+            print(f"[WARNING] Failed to initialize session: {str(e)}")
+            self.session = requests.Session()
 
     def _load_page(self, url):
-        """Load Vegamovies page with JavaScript rendering"""
-        print(f"[INFO] Loading page: {url}")
+        """Load Vegamovies page via HTTP GET"""
+        print(f"[INFO] Fetching page: {url}")
         try:
-            self.driver.get(url)
-            time.sleep(1)
-            
-            # Scroll to load all content
-            for _ in range(3):
-                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(0.5)
-            
-            time.sleep(1)
-            html = self.driver.page_source
-            print(f"[INFO] Page loaded successfully")
-            return html
+            response = self.session.get(url, timeout=15)
+            response.raise_for_status()
+            print(f"[INFO] Page loaded successfully (Status: {response.status_code})")
+            return response.text
         except Exception as e:
             print(f"[ERROR] Failed to load page: {str(e)}")
             raise
@@ -126,19 +113,18 @@ class VegamoviesScraper:
         """Main scraping function"""
         start_time = time.time()
         print(f"\n{'='*80}")
-        print(f"[INFO] VEGAMOVIES SCRAPER v2.0")
+        print(f"[INFO] VEGAMOVIES SCRAPER v3.0 (HTTP-BASED)")
         print(f"[INFO] URL: {url}")
         if quality_filter:
             print(f"[INFO] Quality Filter: {quality_filter}")
         print(f"{'='*80}\n")
 
-        self.driver = self._create_driver()
         results = []
 
         try:
             # Load page
             html = self._load_page(url)
-            soup = BeautifulSoup(html, "lxml")
+            soup = BeautifulSoup(html, "html.parser")
 
             # Extract page info
             title_tag = soup.find("title")
@@ -201,7 +187,7 @@ class VegamoviesScraper:
 
             # Resolve each shortener link to get direct download link
             if all_links:
-                print(f"[INFO] Resolving shortener links...\n")
+                print(f"[INFO] Resolving shortener links (this may take time)...\n")
                 for idx, link_info in enumerate(all_links, 1):
                     try:
                         print(f"[{idx}/{len(all_links)}] Processing {link_info['quality']} - {link_info['episode']}")
@@ -232,55 +218,71 @@ class VegamoviesScraper:
 
             return results
 
-        finally:
-            self._close()
+        except Exception as e:
+            print(f"[ERROR] Scraping failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     def _resolve_shortener(self, short_url):
-        """Resolve shortener URL to get direct download link"""
+        """Resolve shortener URL to get direct download link (HTTP-based with redirects)"""
         try:
-            self.driver.get(short_url)
-            time.sleep(1.5)
-
-            # Look for verify button
-            try:
-                verify_btn = WebDriverWait(self.driver, 3).until(
-                    EC.element_to_be_clickable((By.XPATH, "//button | //a[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'verify')]"))
-                )
-                self.driver.execute_script("arguments[0].click();", verify_btn)
-                time.sleep(2)
-            except TimeoutException:
-                time.sleep(1)
-
-            # Extract direct links
-            html = self.driver.page_source
-            soup = BeautifulSoup(html, "lxml")
+            print(f"        [DEBUG] Resolving shortener: {short_url}")
             
-            # Check for links in page
+            # Follow redirects to get final URL
+            response = self.session.get(short_url, timeout=15, allow_redirects=True)
+            final_url = response.url
+            print(f"        [DEBUG] Final URL after redirects: {final_url}")
+            
+            # Parse final page
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            # Pattern 1: Look for direct download links in all <a> tags
             for link in soup.find_all('a', href=True):
                 href = link.get('href', '')
-                if href.startswith('http') and not any(x in href.lower() for x in ["nexdrive", "fast-dl", "short", "bit.ly"]):
-                    # Check if it's a direct download link
-                    if any(x in href.lower() for x in ["googledrive", "drive.google", "video-downloads.googleusercontent", "download", "dl"]):
+                if href.startswith('http'):
+                    href_lower = href.lower()
+                    # Check if it's a direct download link (Google Drive, etc)
+                    if any(x in href_lower for x in ["googledrive", "drive.google", "video-downloads.googleusercontent", "/download", "dl="]):
+                        print(f"        [DEBUG] Found direct link in <a> tag: {href[:70]}")
                         return href
-
-            # Also check in page source for direct links
-            direct_links = re.findall(r'https?://[^\s"\'<>]+(?:video-downloads\.googleusercontent|googledrive)', html)
+            
+            # Pattern 2: Search page source for direct links using regex
+            direct_links = re.findall(r'https?://[^\s"\'<>]+(?:video-downloads\.googleusercontent|drive\.google\.com)[^\s"\'<>]*', response.text)
             if direct_links:
+                print(f"        [DEBUG] Found direct link via regex: {direct_links[0][:70]}")
                 return direct_links[0]
-
+            
+            # Pattern 3: Check for redirect meta tags
+            meta_refresh = soup.find("meta", attrs={"http-equiv": "refresh"})
+            if meta_refresh and meta_refresh.get("content"):
+                content = meta_refresh.get("content", "")
+                if "url=" in content:
+                    redirect_url = content.split("url=")[-1]
+                    if redirect_url.startswith("http"):
+                        print(f"        [DEBUG] Found meta redirect: {redirect_url[:70]}")
+                        return redirect_url
+            
+            # Pattern 4: Check for JavaScript redirect patterns
+            js_patterns = [
+                r'window\.location\s*=\s*["\']([^"\']+)["\']',
+                r'location\.href\s*=\s*["\']([^"\']+)["\']',
+                r'location\.replace\(["\']([^"\']+)["\']\)',
+            ]
+            for pattern in js_patterns:
+                matches = re.findall(pattern, response.text)
+                if matches:
+                    for match in matches:
+                        if match.startswith('http'):
+                            print(f"        [DEBUG] Found JS redirect: {match[:70]}")
+                            return match
+            
+            print(f"        [WARNING] No direct link found on final page")
             return None
 
         except Exception as e:
-            print(f"        [ERROR] Resolution failed: {str(e)}")
+            print(f"        [ERROR] Resolution failed: {type(e).__name__}: {str(e)}")
             return None
-
-    def _close(self):
-        """Close WebDriver"""
-        if self.driver:
-            try:
-                self.driver.quit()
-            except:
-                pass
 
 
 def scrape_website(url, quality_filter=None):
@@ -312,13 +314,21 @@ if __name__ == "__main__":
     url = sys.argv[1]
     quality = sys.argv[2] if len(sys.argv) > 2 else None
     
-    results = scrape_website(url, quality)
-    
-    if results:
-        print(f"\n{'='*80}")
-        print("DIRECT DOWNLOAD LINKS")
-        print(f"{'='*80}\n")
-        for r in results:
-            filename = f"{r['show_name'].replace(' ', '.')}.S{r['season']}E{r['episode'].replace('EP', '')}.{r['quality']}.{r['size']}.mkv"
-            print(f"File: {filename}")
-            print(f"Link: {r['url']}\n")
+    try:
+        results = scrape_website(url, quality)
+        
+        if results:
+            print(f"\n{'='*80}")
+            print("DIRECT DOWNLOAD LINKS")
+            print(f"{'='*80}\n")
+            for r in results:
+                filename = f"{r['show_name'].replace(' ', '.')}.S{r['season']}E{r['episode'].replace('EP', '')}.{r['quality']}.{r['size']}.mkv"
+                print(f"File: {filename}")
+                print(f"Link: {r['url']}\n")
+        else:
+            print("[ERROR] No direct links found")
+    except Exception as e:
+        print(f"[ERROR] Scraping failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
