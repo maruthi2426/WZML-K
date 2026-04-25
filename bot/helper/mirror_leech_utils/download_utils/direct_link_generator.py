@@ -16,6 +16,23 @@ import sys
 from pathlib import Path
 import importlib.util
 import os
+import subprocess
+
+# Pre-install scraper dependencies
+def _ensure_scraper_deps():
+    """Ensure all scraper dependencies are installed"""
+    deps = ["requests", "beautifulsoup4", "lxml"]
+    for dep in deps:
+        try:
+            __import__(dep if dep != "beautifulsoup4" else "bs4")
+        except ImportError:
+            print(f"[INFO] Installing scraper dependency: {dep}")
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", dep, "-q"])
+            except Exception as e:
+                print(f"[WARNING] Could not auto-install {dep}: {e}")
+
+_ensure_scraper_deps()
 
 from ....core.config_manager import Config
 from ...ext_utils.exceptions import DirectDownloadLinkException
