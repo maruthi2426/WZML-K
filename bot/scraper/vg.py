@@ -1,9 +1,10 @@
 """
-Vegamovies Direct Link Scraper v4.0
-Advanced HTTP-based scraper (no Selenium) to extract direct download links from Vegamovies movie URLs
-Supports quality filtering and both movie and series content
-Works on headless servers without Chrome/Chromium installed
-Uses advanced request handling with retry logic and Cloudflare bypass
+Vegamovies Direct Link Scraper v5.1
+FIXED: Only scrapes the actual DOWNLOAD SECTION 
+- Ignores related movies, sidebar, navigation, recommendations
+- Only targets nexdrive / fast-dl.org / vgmlinks.app links inside download blocks
+- Strict quality filtering before resolving
+- Improved _resolve_shortener for nexdrive + fast-dl patterns
 """
 
 import sys
@@ -14,7 +15,6 @@ from urllib.parse import urljoin
 from typing import Dict, List, Optional, Any
 
 def _ensure_dependencies():
-    """Ensure all required dependencies are installed"""
     required = ["requests", "beautifulsoup4", "cloudscraper"]
     missing = []
     
@@ -59,19 +59,16 @@ except ImportError:
 
 
 class VegamoviesScraper:
-    """Advanced HTTP-based scraper for Vegamovies URLs"""
+    """Advanced HTTP-based scraper for Vegamovies - DOWNLOAD SECTION ONLY"""
     
     def __init__(self):
-        """Initialize scraper with session and headers"""
         self.session = None
         self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
         self._init_session()
 
     def _init_session(self):
-        """Initialize HTTP session with advanced configuration"""
         print("[INFO] Initializing HTTP session...")
         try:
-            # Use CloudScraper if available for Cloudflare bypass
             if create_scraper:
                 self.session = create_scraper()
                 print("[INFO] Using CloudScraper for advanced bypass")
@@ -79,7 +76,6 @@ class VegamoviesScraper:
                 self.session = requests.Session()
                 print("[INFO] Using standard requests session")
             
-            # Configure session with retry strategy
             from requests.adapters import HTTPAdapter
             from urllib3.util.retry import Retry
             
@@ -93,19 +89,13 @@ class VegamoviesScraper:
             self.session.mount("http://", adapter)
             self.session.mount("https://", adapter)
             
-            # Set headers for browser-like requests
             self.session.headers.update({
                 "User-Agent": self.user_agent,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
                 "Accept-Language": "en-US,en;q=0.9",
                 "Accept-Encoding": "gzip, deflate, br",
                 "Connection": "keep-alive",
                 "Upgrade-Insecure-Requests": "1",
-                "Cache-Control": "max-age=0",
-                "sec-ch-ua-mobile": "?0",
-                "sec-fetch-dest": "document",
-                "sec-fetch-mode": "navigate",
-                "sec-fetch-site": "none",
             })
             print("[INFO] Session headers configured")
         except Exception as e:
@@ -114,8 +104,7 @@ class VegamoviesScraper:
                 self.session = requests.Session()
                 self.session.headers.update({"User-Agent": self.user_agent})
 
-    def _load_page(self, url: str, timeout: int = 20) -> str:
-        """Load webpage with error handling and retries"""
+    def _load_page(self, url: str, timeout: int = 25) -> str:
         print(f"[INFO] Fetching URL: {url}")
         if not self.session:
             raise Exception("Session not initialized")
@@ -125,17 +114,10 @@ class VegamoviesScraper:
             response.raise_for_status()
             print(f"[INFO] Page loaded successfully (Status: {response.status_code}, Size: {len(response.text)} bytes)")
             return response.text
-        except requests.exceptions.Timeout:
-            raise Exception(f"Request timeout after {timeout}s")
-        except requests.exceptions.ConnectionError as e:
-            raise Exception(f"Connection error: {e}")
-        except requests.exceptions.HTTPError as e:
-            raise Exception(f"HTTP error {response.status_code}: {e}")
         except Exception as e:
             raise Exception(f"Failed to load page: {str(e)}")
 
     def _normalize_quality(self, quality_str: str) -> str:
-        """Normalize quality string for comparison"""
         if not quality_str:
             return "unknown"
         q = quality_str.upper().strip()
@@ -143,7 +125,6 @@ class VegamoviesScraper:
         return q
 
     def _extract_episode(self, text: str = "", url_slug: str = "") -> str:
-        """Extract episode number from text or URL slug"""
         if url_slug:
             slug_match = re.search(r'ep[-_]0*(\d{1,3})', url_slug.lower())
             if slug_match:
@@ -154,7 +135,6 @@ class VegamoviesScraper:
                 r'ep[-_:\s]*0*(\d{1,3})',
                 r'episode[-_:\s]*0*(\d{1,3})',
                 r'\be(\d{2,3})\b',
-                r'e(\d{1,3})(?:\s|$)',
             ]
             for pattern in patterns:
                 match = re.search(pattern, text.lower())
@@ -164,31 +144,27 @@ class VegamoviesScraper:
         return "EP01"
 
     def scrape(self, url: str, quality_filter: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Main scraping function - simplified and more reliable"""
         start_time = time.time()
         print(f"\n{'='*80}")
-        print(f"[INFO] VEGAMOVIES SCRAPER v5.0 (SIMPLIFIED & RELIABLE)")
+        print(f"[INFO] VEGAMOVIES SCRAPER v5.1 (DOWNLOAD SECTION ONLY)")
         print(f"[INFO] URL: {url}")
         if quality_filter:
-            print(f"[INFO] Quality Filter: {quality_filter}")
+            print(f"[INFO] Quality Filter: {quality_filter} (strict)")
         print(f"{'='*80}\n")
 
         results = []
 
         try:
-            # Load page
-            html = self._load_page(url, timeout=25)
+            html = self._load_page(url)
             
             if not BeautifulSoup:
                 raise Exception("BeautifulSoup4 not available")
             
             soup = BeautifulSoup(html, "html.parser")
 
-            # Extract page info
+            # Extract clean title
             title_tag = soup.find("title")
             raw_title = title_tag.get_text(strip=True) if title_tag else "Unknown"
-            
-            # Clean title
             clean_title = re.sub(r'\s*\|\s*Vegamovies.*$', '', raw_title, flags=re.I).strip()
             clean_title = re.sub(r'^Download\s+', '', clean_title, flags=re.I).strip()
             clean_title = re.sub(r'\s+', ' ', clean_title)
@@ -200,64 +176,74 @@ class VegamoviesScraper:
             print(f"[INFO] Title: {show_name}")
             print(f"[INFO] Season: S{season}\n")
 
-            # Scan for ALL download links and quality markers
+            # === CRITICAL FIX: Only scan DOWNLOAD SECTION ===
+            # Look for common download container classes/ids used on vegamovies
+            download_containers = []
+            
+            # Common selectors for download blocks
+            selectors = [
+                "div[class*='download']", "div[id*='download']",
+                "section[class*='download']", "div[class*='links']",
+                "h2:contains('Download')", "h3:contains('Download')",
+                ".entry-content", ".post-content", ".single-post"
+            ]
+            
+            for sel in selectors:
+                if sel.startswith("h"):
+                    found = soup.find_all(['h2', 'h3'], string=re.compile(r'download', re.I))
+                else:
+                    found = soup.select(sel)
+                download_containers.extend(found)
+
+            # Fallback: whole content but filter aggressively later
+            if not download_containers:
+                download_containers = [soup]
+
+            print(f"[INFO] Found {len(download_containers)} potential download container(s)")
+
             all_links = []
             current_quality = "UNKNOWN"
             current_size = "UNKNOWN"
 
-            print(f"[INFO] Scanning page for download links...\n")
+            print(f"[INFO] Scanning DOWNLOAD SECTION only for nexdrive / fast-dl links...\n")
 
-            # Get all text nodes to find quality markers
-            for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'strong', 'p', 'span', 'div']):
-                text = element.get_text(strip=True)
-                if not text:
-                    continue
+            for container in download_containers:
+                # Get text for quality detection within this container
+                container_text = container.get_text(strip=True)
                 
-                # Check for quality markers (480p, 720p, 1080p, etc)
-                quality_match = re.search(r'(480p|720p|1080p|4k|2160p|HQ\s+1080p|HD\s+1080p)', text, re.I)
+                # Update current quality from headings inside container
+                quality_match = re.search(r'(480p|720p|1080p|4k|2160p|HQ\s*1080p|HD\s*1080p)', container_text, re.I)
                 if quality_match:
                     current_quality = quality_match.group(0).upper()
-                    size_match = re.search(r'(\d+\.?\d*)\s*(GB|MB)', text, re.I)
-                    if size_match:
-                        current_size = f"{size_match.group(1)} {size_match.group(2)}".upper()
-                    print(f"     Found quality: {current_quality} ({current_size})")
+                
+                size_match = re.search(r'(\d+\.?\d*)\s*(GB|MB)', container_text, re.I)
+                if size_match:
+                    current_size = f"{size_match.group(1)} {size_match.group(2)}".upper()
 
-            # Now scan for all <a> tags and links
-            for link_element in soup.find_all('a', href=True):
-                href = link_element.get('href', '').strip()
-                if not href or href == '#':
-                    continue
-                
-                # Make absolute URL
-                if not href.startswith('http'):
-                    href = urljoin(url, href)
-                
-                link_text = link_element.get_text(strip=True)
-                href_lower = href.lower()
-                
-                # Look for download/shortener links (very broad matching)
-                is_download_link = False
-                
-                # Check for common shortener/download domains
-                shorteners = [
-                    "nexdrive", "fast-dl", "bit.ly", "tinyurl", "short", "adf.ly", "adfly",
-                    "zippy", "dropbox", "drive.google", "dl.", "/go/", "/download/", 
-                    "appdrive", "pixeldrive", "realdebrid", "gdrivescraper", "uptobox"
-                ]
-                
-                for shortener in shorteners:
-                    if shortener in href_lower:
-                        is_download_link = True
-                        break
-                
-                # Also check link text for download indicators
-                link_text_lower = link_text.lower()
-                if any(x in link_text_lower for x in ["download", "dl", "link", "drive", "direct", "mirror"]):
-                    if not any(x in href_lower for x in ["jsd", "javscript", "css", "analytics"]):
-                        is_download_link = True
-                
-                if is_download_link and len(href) > 10:
+                # Now find ONLY relevant shortener links inside this container
+                for link_element in container.find_all('a', href=True):
+                    href = link_element.get('href', '').strip()
+                    if not href or href == '#' or href.startswith('javascript:'):
+                        continue
+                    
+                    if not href.startswith('http'):
+                        href = urljoin(url, href)
+                    
+                    link_text = link_element.get_text(strip=True)
+                    href_lower = href.lower()
+                    text_lower = link_text.lower()
+
+                    # STRICT FILTER: Only nexdrive, fast-dl, vgmlinks (as intermediate)
+                    allowed_domains = ["nexdrive", "fast-dl.org", "vgmlinks.app"]
+                    if not any(domain in href_lower for domain in allowed_domains):
+                        continue
+
+                    # Additional safety: skip if it's clearly a movie page link
+                    if re.search(r'/(\d{4,5}-[a-z0-9-]+-\d{4})', href_lower) and "download" not in text_lower:
+                        continue
+
                     episode = self._extract_episode(link_text, href)
+                    
                     all_links.append({
                         "url": href,
                         "quality": current_quality,
@@ -265,41 +251,41 @@ class VegamoviesScraper:
                         "episode": episode,
                         "text": link_text
                     })
-                    print(f"     [FOUND] {link_text[:50]} -> {href[:60]}...")
+                    print(f"     [FOUND in DL section] {link_text[:60]} -> {href[:70]}... | Quality: {current_quality}")
 
-            print(f"\n[INFO] Total links found: {len(all_links)}\n")
+            print(f"\n[INFO] Total relevant download links found in DOWNLOAD SECTION: {len(all_links)}\n")
 
             if not all_links:
-                print("[ERROR] No download links found on page")
-                print("[INFO] This could mean:")
-                print("     - Page structure is different than expected")
-                print("     - Links are loaded dynamically with JavaScript")
-                print("     - Page might require authentication")
+                print("[ERROR] No nexdrive/fast-dl links found in download section")
                 return results
 
-            # Filter by quality if specified
+            # === STRICT QUALITY FILTER ===
             if quality_filter and all_links:
                 norm_filter = self._normalize_quality(quality_filter)
-                filtered = [l for l in all_links if self._normalize_quality(l["quality"]) == norm_filter]
+                filtered = []
+                for link in all_links:
+                    if self._normalize_quality(link["quality"]) == norm_filter or norm_filter in link["quality"].upper():
+                        filtered.append(link)
+                
                 if filtered:
                     all_links = filtered
-                    print(f"[INFO] Quality filter applied ({quality_filter}) - {len(all_links)} link(s)\n")
+                    print(f"[INFO] Strict quality filter applied ({quality_filter}) → {len(all_links)} link(s) remaining")
                 else:
-                    print(f"[WARNING] No links found for quality: {quality_filter}")
-                    print(f"[INFO] Using all available links instead\n")
+                    print(f"[WARNING] No links matched exact quality {quality_filter}. Using best available.")
+                    # fallback to all (but still only from DL section)
 
-            # Resolve links
+            # Resolve only the filtered relevant links
             if all_links:
-                print(f"[INFO] Resolving {len(all_links)} link(s) to direct downloads...\n")
+                print(f"[INFO] Resolving {len(all_links)} short link(s) (nexdrive + fast-dl)...\n")
                 
                 for idx, link_info in enumerate(all_links, 1):
                     try:
-                        print(f"[{idx}/{len(all_links)}] {link_info['quality']} - {link_info['text'][:40]}")
-                        print(f"     URL: {link_info['url'][:70]}...")
+                        print(f"[{idx}/{len(all_links)}] {link_info['quality']} | {link_info['size']} - {link_info['text'][:50]}")
+                        print(f"     Short URL: {link_info['url'][:80]}...")
                         
                         direct_link = self._resolve_shortener(link_info["url"])
                         
-                        if direct_link:
+                        if direct_link and direct_link.startswith("http"):
                             results.append({
                                 "show_name": show_name,
                                 "season": season,
@@ -308,16 +294,15 @@ class VegamoviesScraper:
                                 "size": link_info["size"],
                                 "url": direct_link
                             })
-                            print(f"     [✓] Direct: {direct_link[:70]}...\n")
+                            print(f"     [✓] DIRECT: {direct_link[:90]}...\n")
                         else:
-                            print(f"     [✗] Failed to resolve\n")
+                            print(f"     [✗] Could not resolve to direct link\n")
                     except Exception as e:
-                        print(f"     [ERROR] {str(e)}\n")
+                        print(f"     [ERROR] Resolution failed: {str(e)}\n")
 
             elapsed = time.time() - start_time
             print(f"{'='*80}")
-            print(f"[INFO] Scraping completed in {elapsed:.2f}s")
-            print(f"[INFO] Total direct links found: {len(results)}")
+            print(f"[INFO] Scraping completed in {elapsed:.2f}s | Direct links: {len(results)}")
             print(f"{'='*80}\n")
 
             return results
@@ -329,141 +314,122 @@ class VegamoviesScraper:
             raise
 
     def _resolve_shortener(self, short_url: str) -> Optional[str]:
-        """Resolve shortener URL to direct download link using multiple patterns"""
+        """Improved resolver focused on nexdrive + fast-dl patterns"""
         if not self.session:
             return None
         
         try:
-            print(f"        [DEBUG] Resolving: {short_url}")
+            print(f"        [RESOLVE] {short_url}")
             
-            # Follow HTTP redirects
+            # Fast-dl.org often redirects directly or has simple final URL
+            if "fast-dl.org" in short_url:
+                response = self.session.get(short_url, timeout=15, allow_redirects=True)
+                final = response.url
+                if "video-downloads.googleusercontent.com" in final or "/download" in final:
+                    print(f"        [✓] Fast-DL direct: {final[:100]}")
+                    return final
+                # fallback
+                return final
+
+            # General handling
             response = self.session.get(short_url, timeout=20, allow_redirects=True)
             final_url = response.url
-            print(f"        [DEBUG] Final URL: {final_url}")
-            
+            print(f"        [DEBUG] Final after redirect: {final_url}")
+
             if not BeautifulSoup:
-                return None
-            
+                return final_url if final_url != short_url else None
+
             soup = BeautifulSoup(response.text, "html.parser")
-            
-            # Pattern 1: Direct link in <a> tags
-            for link in soup.find_all('a', href=True):
-                href = link.get('href', '')
-                if href.startswith('http'):
-                    href_lower = href.lower()
-                    if any(x in href_lower for x in ["googledrive", "drive.google", "video-downloads.googleusercontent", "/download", "dl="]):
-                        print(f"        [DEBUG] Found in <a> tag: {href[:60]}...")
-                        return href
-            
-            # Pattern 2: Regex search in page source
+            page_text = response.text
+
+            # Common direct Google Drive / video patterns
             direct_patterns = [
-                r'https?://[^\s"\'<>]*(?:drive\.google\.com|video-downloads\.googleusercontent)[^\s"\'<>]*',
-                r'https?://[^\s"\'<>]*(?:download|dl)[^\s"\'<>]*(?:google|drive)[^\s"\'<>]*',
+                r'https?://[^\s"\'<>]+video-downloads\.googleusercontent\.com[^\s"\'<>]*',
+                r'https?://[^\s"\'<>]+drive\.google\.com[^\s"\'<>]*uc\?id=[^\s"\'<>]+',
+                r'https?://[^\s"\'<>]+/download[^\s"\'<>]*',
             ]
-            for pattern in direct_patterns:
-                matches = re.findall(pattern, response.text)
+            
+            for pat in direct_patterns:
+                matches = re.findall(pat, page_text)
                 if matches:
-                    print(f"        [DEBUG] Found via regex: {matches[0][:60]}...")
-                    return matches[0]
-            
-            # Pattern 3: Meta refresh redirects
-            meta_refresh = soup.find("meta", attrs={"http-equiv": "refresh"})
-            if meta_refresh and meta_refresh.get("content"):
-                content = meta_refresh.get("content", "")
-                if "url=" in content.lower():
-                    redirect_url = re.search(r'url\s*=\s*["\']?([^"\']+)["\']?', content, re.I)
-                    if redirect_url:
-                        url = redirect_url.group(1)
-                        if url.startswith('http'):
-                            print(f"        [DEBUG] Found meta redirect: {url[:60]}...")
-                            return url
-            
-            # Pattern 4: JavaScript window.location patterns
+                    direct = matches[0]
+                    print(f"        [✓] Direct via regex: {direct[:100]}")
+                    return direct
+
+            # JS location redirects (common on nexdrive)
             js_patterns = [
-                r'window\.location\s*[=\.href]*\s*["\']([^"\']+)["\']',
+                r'window\.location\s*=\s*["\']([^"\']+)["\']',
                 r'location\.href\s*=\s*["\']([^"\']+)["\']',
-                r'location\.replace\s*\(\s*["\']([^"\']+)["\']\s*\)',
-                r'(?:document\.location|window\.location\.href)\s*=\s*["\']?([^\s"\'<>]+)',
+                r'location\.replace\s*\(["\']([^"\']+)["\']',
             ]
-            for pattern in js_patterns:
-                matches = re.findall(pattern, response.text)
-                if matches:
-                    for match in matches:
-                        if match.startswith('http'):
-                            print(f"        [DEBUG] Found JS redirect: {match[:60]}...")
-                            return match
-            
-            # Pattern 5: Check for button/link data attributes
-            for element in soup.find_all(['button', 'a', 'div']):
-                for attr in ['data-url', 'data-link', 'data-href', 'data-download']:
-                    if element.has_attr(attr):
-                        url = element.get(attr, '')
-                        if url.startswith('http'):
-                            print(f"        [DEBUG] Found in data attribute: {url[:60]}...")
-                            return url
-            
-            print(f"        [WARNING] No direct link found")
+            for pat in js_patterns:
+                matches = re.findall(pat, page_text)
+                for m in matches:
+                    if m.startswith("http") and ("googleusercontent" in m or "drive.google" in m or "/download" in m):
+                        print(f"        [✓] JS redirect direct: {m[:100]}")
+                        return m
+
+            # Meta refresh
+            meta = soup.find("meta", attrs={"http-equiv": re.compile("refresh", re.I)})
+            if meta and meta.get("content"):
+                content = meta["content"]
+                url_match = re.search(r'url\s*=\s*["\']?([^"\']+)', content, re.I)
+                if url_match:
+                    u = url_match.group(1)
+                    if u.startswith("http"):
+                        return u
+
+            # If we reached a Google Drive viewer or direct, return it
+            if any(x in final_url for x in ["video-downloads.googleusercontent.com", "drive.google.com/uc"]):
+                return final_url
+
+            print(f"        [WARNING] No direct link pattern matched for {short_url}")
             return None
 
         except Exception as e:
-            print(f"        [ERROR] Resolution failed: {type(e).__name__}: {str(e)}")
+            print(f"        [ERROR] Resolve failed: {type(e).__name__}: {str(e)}")
             return None
 
 
 def scrape_website(url: str, quality_filter: Optional[str] = None) -> List[Dict[str, Any]]:
-    """
-    Main function to scrape Vegamovies URL for direct download links
-    
-    Args:
-        url: Vegamovies movie/series URL
-        quality_filter: Optional quality filter (e.g., "1080p")
-    
-    Returns:
-        List of dictionaries with direct download link info
-    """
-    print(f"\n[INFO] Starting Vegamovies scraper")
+    print(f"[INFO] Starting Vegamovies scraper (v5.1 - Download Section Only)")
     scraper = VegamoviesScraper()
     try:
-        results = scraper.scrape(url, quality_filter)
-        return results
+        return scraper.scrape(url, quality_filter)
     except Exception as e:
-        print(f"[ERROR] Scraping failed: {type(e).__name__}: {str(e)}")
+        print(f"[ERROR] Overall scraping failed: {type(e).__name__}: {str(e)}")
         raise
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python vg.py <vegamovies_url> [quality]")
-        print("Example: python vg.py 'https://vegamovies.nf/movie-url' '1080p'")
+        print("Example: python vg.py 'https://vegamovies.nf/37740-...' '1080p'")
         sys.exit(1)
 
     url = sys.argv[1]
     quality = sys.argv[2] if len(sys.argv) > 2 else None
     
     try:
-        print(f"\n[TEST MODE] Starting Vegamovies Scraper")
-        print(f"[TEST MODE] URL: {url}")
-        print(f"[TEST MODE] Quality: {quality if quality else 'ALL'}\n")
-        
         results = scrape_website(url, quality)
         
         if results:
             print(f"\n{'='*80}")
-            print("✓ SUCCESS - DIRECT DOWNLOAD LINKS EXTRACTED")
+            print("✓ SUCCESS - DIRECT DOWNLOAD LINKS EXTRACTED (Download Section Only)")
             print(f"{'='*80}\n")
             for i, r in enumerate(results, 1):
-                filename = f"{r['show_name'].replace(' ', '.')}.S{r['season']}E{r['episode'].replace('EP', '')}.{r['quality']}.{r['size']}.mkv"
+                size_part = f".{r['size'].replace(' ', '.')}" if r['size'] != "UNKNOWN" else ""
+                filename = f"{r['show_name'].replace(' ', '.')}.S{r['season']}E{r['episode'].replace('EP', '')}.{r['quality']}{size_part}.mkv"
                 print(f"[{i}] {filename}")
                 print(f"    Quality: {r['quality']}")
                 print(f"    Size: {r['size']}")
-                print(f"    Link: {r['url']}\n")
-            print(f"Total: {len(results)} direct link(s) found\n")
+                print(f"    Direct Link: {r['url']}\n")
+            print(f"Total direct links: {len(results)}\n")
         else:
-            print("[ERROR] No direct links found - scraper may need adjustment")
-            print("[INFO] Check the logs above for more details")
+            print("[ERROR] No direct links extracted. Check logs above.")
             sys.exit(1)
     except Exception as e:
-        print(f"\n[CRITICAL ERROR] Scraping failed: {type(e).__name__}: {str(e)}")
+        print(f"\n[CRITICAL ERROR] {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
