@@ -160,6 +160,10 @@ class VegamoviesScraper:
         
         print(f"[INFO] Scanning for NEXDRIVE + FAST-DL links only...\n")
         
+        # Debug: count all <a> tags
+        all_a_tags = soup.find_all('a', href=True)
+        print(f"[DEBUG] Found {len(all_a_tags)} total <a> tags on page")
+        
         for i, element in enumerate(all_elements):
             text = element.get_text(strip=True)
             if not text:
@@ -175,7 +179,7 @@ class VegamoviesScraper:
                 print(f"     Quality marker found: {current_quality} ({current_size})")
                 continue
             
-            # Look for ONLY nexdrive and fast-dl.org links
+            # Look for ONLY nexdrive and fast-dl links (support multiple domains)
             if element.name == "a" and element.has_attr("href"):
                 href = element.get('href', '').strip()
                 if not href or href == '#':
@@ -188,9 +192,9 @@ class VegamoviesScraper:
                 link_text = element.get_text(strip=True)
                 href_lower = href.lower()
                 
-                # CRITICAL: Only accept NEXDRIVE or FAST-DL.ORG
+                # Check for NEXDRIVE or FAST-DL (support multiple domain variations)
                 is_nexdrive = "nexdrive" in href_lower
-                is_fastdl = "fast-dl.org" in href_lower
+                is_fastdl = "fast-dl" in href_lower  # Catches fast-dl.org, fast-dl.com, etc
                 
                 if (is_nexdrive or is_fastdl) and len(href) > 10:
                     episode = self._extract_episode(link_text, href)
@@ -210,6 +214,15 @@ class VegamoviesScraper:
                     print(f"     ✓ [{link_type}] {current_quality} ({current_size}) -> {href[:65]}...")
         
         print(f"\n[INFO] Found {len(links)} NEXDRIVE/FAST-DL link(s)")
+        
+        # Debug: if no links found, show some of the links we skipped
+        if not links:
+            print("[DEBUG] No NEXDRIVE/FAST-DL links found. Sample of links on page:")
+            for a_tag in all_a_tags[:10]:  # Show first 10 links
+                href = a_tag.get('href', '')
+                text = a_tag.get_text(strip=True)[:50]
+                print(f"     - {text}: {href[:70]}")
+        
         return links
 
     def _resolve_shortener(self, short_url: str) -> Optional[str]:
