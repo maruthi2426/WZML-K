@@ -164,10 +164,10 @@ class VegamoviesScraper:
         return "EP01"
 
     def scrape(self, url: str, quality_filter: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Main scraping function with advanced parsing"""
+        """Main scraping function - simplified and more reliable"""
         start_time = time.time()
         print(f"\n{'='*80}")
-        print(f"[INFO] VEGAMOVIES SCRAPER v4.0 (ADVANCED HTTP-BASED)")
+        print(f"[INFO] VEGAMOVIES SCRAPER v5.0 (SIMPLIFIED & RELIABLE)")
         print(f"[INFO] URL: {url}")
         if quality_filter:
             print(f"[INFO] Quality Filter: {quality_filter}")
@@ -200,61 +200,102 @@ class VegamoviesScraper:
             print(f"[INFO] Title: {show_name}")
             print(f"[INFO] Season: S{season}\n")
 
-            # Find all download links
+            # Scan for ALL download links and quality markers
             all_links = []
-            current_quality = "unknown"
-            current_size = "unknown"
+            current_quality = "UNKNOWN"
+            current_size = "UNKNOWN"
 
-            # Extract all elements and look for quality and links
-            for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'strong', 'p', 'a', 'span', 'div']):
+            print(f"[INFO] Scanning page for download links...\n")
+
+            # Get all text nodes to find quality markers
+            for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'strong', 'p', 'span', 'div']):
                 text = element.get_text(strip=True)
+                if not text:
+                    continue
                 
-                # Check for quality markers
+                # Check for quality markers (480p, 720p, 1080p, etc)
                 quality_match = re.search(r'(480p|720p|1080p|4k|2160p|HQ\s+1080p|HD\s+1080p)', text, re.I)
                 if quality_match:
                     current_quality = quality_match.group(0).upper()
                     size_match = re.search(r'(\d+\.?\d*)\s*(GB|MB)', text, re.I)
                     if size_match:
                         current_size = f"{size_match.group(1)} {size_match.group(2)}".upper()
-                    print(f"[DEBUG] Found quality: {current_quality} ({current_size})")
+                    print(f"     Found quality: {current_quality} ({current_size})")
+
+            # Now scan for all <a> tags and links
+            for link_element in soup.find_all('a', href=True):
+                href = link_element.get('href', '').strip()
+                if not href or href == '#':
                     continue
+                
+                # Make absolute URL
+                if not href.startswith('http'):
+                    href = urljoin(url, href)
+                
+                link_text = link_element.get_text(strip=True)
+                href_lower = href.lower()
+                
+                # Look for download/shortener links (very broad matching)
+                is_download_link = False
+                
+                # Check for common shortener/download domains
+                shorteners = [
+                    "nexdrive", "fast-dl", "bit.ly", "tinyurl", "short", "adf.ly", "adfly",
+                    "zippy", "dropbox", "drive.google", "dl.", "/go/", "/download/", 
+                    "appdrive", "pixeldrive", "realdebrid", "gdrivescraper", "uptobox"
+                ]
+                
+                for shortener in shorteners:
+                    if shortener in href_lower:
+                        is_download_link = True
+                        break
+                
+                # Also check link text for download indicators
+                link_text_lower = link_text.lower()
+                if any(x in link_text_lower for x in ["download", "dl", "link", "drive", "direct", "mirror"]):
+                    if not any(x in href_lower for x in ["jsd", "javscript", "css", "analytics"]):
+                        is_download_link = True
+                
+                if is_download_link and len(href) > 10:
+                    episode = self._extract_episode(link_text, href)
+                    all_links.append({
+                        "url": href,
+                        "quality": current_quality,
+                        "size": current_size,
+                        "episode": episode,
+                        "text": link_text
+                    })
+                    print(f"     [FOUND] {link_text[:50]} -> {href[:60]}...")
 
-                # Check for download links
-                if element.name == "a" and element.has_attr("href"):
-                    href = urljoin(url, element["href"])
-                    link_text = element.get_text(strip=True)
-                    
-                    # Identify shortener links
-                    if any(x in href.lower() for x in ["nexdrive", "fast-dl", "bit.ly", "tinyurl", "short", "adf.ly", "adfly"]):
-                        episode = self._extract_episode(link_text, href)
-                        all_links.append({
-                            "url": href,
-                            "quality": current_quality,
-                            "size": current_size,
-                            "episode": episode,
-                            "text": link_text
-                        })
-                        print(f"[DEBUG] Found shortener link: {href[:60]}...")
+            print(f"\n[INFO] Total links found: {len(all_links)}\n")
 
-            print(f"[INFO] Found {len(all_links)} shortener link(s)\n")
+            if not all_links:
+                print("[ERROR] No download links found on page")
+                print("[INFO] This could mean:")
+                print("     - Page structure is different than expected")
+                print("     - Links are loaded dynamically with JavaScript")
+                print("     - Page might require authentication")
+                return results
 
             # Filter by quality if specified
             if quality_filter and all_links:
                 norm_filter = self._normalize_quality(quality_filter)
                 filtered = [l for l in all_links if self._normalize_quality(l["quality"]) == norm_filter]
                 if filtered:
-                    all_links = filtered[:1]
-                    print(f"[INFO] Quality filter applied - using {len(all_links)} link(s)\n")
+                    all_links = filtered
+                    print(f"[INFO] Quality filter applied ({quality_filter}) - {len(all_links)} link(s)\n")
                 else:
-                    print(f"[WARNING] No links found for quality: {quality_filter}\n")
+                    print(f"[WARNING] No links found for quality: {quality_filter}")
+                    print(f"[INFO] Using all available links instead\n")
 
-            # Resolve shortener links to direct download links
+            # Resolve links
             if all_links:
-                print(f"[INFO] Resolving shortener links to direct links (this may take time)...\n")
+                print(f"[INFO] Resolving {len(all_links)} link(s) to direct downloads...\n")
+                
                 for idx, link_info in enumerate(all_links, 1):
                     try:
-                        print(f"[{idx}/{len(all_links)}] Processing: {link_info['quality']} - {link_info['episode']}")
-                        print(f"     Shortener: {link_info['url'][:70]}...")
+                        print(f"[{idx}/{len(all_links)}] {link_info['quality']} - {link_info['text'][:40]}")
+                        print(f"     URL: {link_info['url'][:70]}...")
                         
                         direct_link = self._resolve_shortener(link_info["url"])
                         
@@ -267,11 +308,11 @@ class VegamoviesScraper:
                                 "size": link_info["size"],
                                 "url": direct_link
                             })
-                            print(f"     ✓ SUCCESS: {direct_link[:70]}...\n")
+                            print(f"     [✓] Direct: {direct_link[:70]}...\n")
                         else:
-                            print(f"     ✗ FAILED: Could not resolve link\n")
+                            print(f"     [✗] Failed to resolve\n")
                     except Exception as e:
-                        print(f"     ✗ ERROR: {str(e)}\n")
+                        print(f"     [ERROR] {str(e)}\n")
 
             elapsed = time.time() - start_time
             print(f"{'='*80}")
@@ -400,18 +441,26 @@ if __name__ == "__main__":
     quality = sys.argv[2] if len(sys.argv) > 2 else None
     
     try:
+        print(f"\n[TEST MODE] Starting Vegamovies Scraper")
+        print(f"[TEST MODE] URL: {url}")
+        print(f"[TEST MODE] Quality: {quality if quality else 'ALL'}\n")
+        
         results = scrape_website(url, quality)
         
         if results:
             print(f"\n{'='*80}")
-            print("DIRECT DOWNLOAD LINKS")
+            print("✓ SUCCESS - DIRECT DOWNLOAD LINKS EXTRACTED")
             print(f"{'='*80}\n")
-            for r in results:
+            for i, r in enumerate(results, 1):
                 filename = f"{r['show_name'].replace(' ', '.')}.S{r['season']}E{r['episode'].replace('EP', '')}.{r['quality']}.{r['size']}.mkv"
-                print(f"File: {filename}")
-                print(f"Link: {r['url']}\n")
+                print(f"[{i}] {filename}")
+                print(f"    Quality: {r['quality']}")
+                print(f"    Size: {r['size']}")
+                print(f"    Link: {r['url']}\n")
+            print(f"Total: {len(results)} direct link(s) found\n")
         else:
-            print("[ERROR] No direct links found")
+            print("[ERROR] No direct links found - scraper may need adjustment")
+            print("[INFO] Check the logs above for more details")
             sys.exit(1)
     except Exception as e:
         print(f"\n[CRITICAL ERROR] Scraping failed: {type(e).__name__}: {str(e)}")
